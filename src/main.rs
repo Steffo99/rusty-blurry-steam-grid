@@ -1,38 +1,25 @@
-extern crate raster;
-use raster::{ResizeMode, PositionMode, BlendMode, Image};
-use raster::editor::{crop, blend, resize};
+extern crate image;
 use std::cmp::Ordering;
 use std::fs;
 use std::path::Path;
 use std::process::exit;
+use std::File;
+use image::imageops;
+use image::GenericImage;
 
-fn generate_steam_logo(logo: &Image, background: &Image) -> Image {
-    let mut logo = logo.clone();
-    let mut result = background.clone();
-    match background.width.cmp(&background.height) {
-        Ordering::Less => resize(&mut result, 0, 215, ResizeMode::ExactHeight).unwrap(),
-        Ordering::Equal => resize(&mut result, 460, 215, ResizeMode::Exact).unwrap(),
-        Ordering::Greater => resize(&mut result, 460, 0, ResizeMode::ExactWidth).unwrap(),
-    }
-    match logo.width.cmp(&logo.height) {
-        Ordering::Less => resize(&mut logo, 0, 215, ResizeMode::ExactHeight).unwrap(),
-        Ordering::Equal => resize(&mut logo, 460, 215, ResizeMode::Exact).unwrap(),
-        Ordering::Greater => resize(&mut logo, 460, 0, ResizeMode::ExactWidth).unwrap(),
-    }
-
-    crop(&mut result, 460, 215, PositionMode::Center, 0, 0).unwrap();
-    crop(&mut logo, 460, 215, PositionMode::Center, 0, 0).unwrap();
-
-    blend(&result, &logo, BlendMode::Normal, 1.0, PositionMode::Center, 0, 0).unwrap()
+fn generate_steam_logo(logo: image::DynamicImage, background: image::DynamicImage) -> image::DynamicImage {
+    //Resize the background
+    let background = background.resize(460, 215, image::FilterType::Triangle);
+    //Resize the logo
+    //15px padding
+    let logo = logo.resize(430, 200, image::FilterType::Triangle);
+    //Blur the background
+    let mut background = background.blur(32.0);
+    imageops::overlay(&mut background, &logo, 15, 15);
+    background
 }
 
 fn main() {
-    /*
-    let logo = raster::open("logo.png").unwrap();
-    let background = raster::open("bg.png").unwrap();
-    let result_image = generate_steam_logo(&logo, &background);
-    raster::save(&result_image, "blank.png").unwrap();
-    */
     let mut folders_missing = false;
     println!("Finding backgrounds...");
     let backgrounds_path = Path::new("./backgrounds");
@@ -42,6 +29,7 @@ fn main() {
         println!("Backgrounds folder missing, creating it...");
         fs::create_dir(&backgrounds_path).unwrap();
     }
+    println!("Finding logos...");
     let logos_path = Path::new("./logos");
     let logos = fs::read_dir(logos_path);
     if logos.is_err() {
@@ -79,26 +67,22 @@ fn main() {
     let mut logos = logos.unwrap();
     for background in backgrounds.by_ref() {
         let background_path = background.unwrap().path();
+        println!("Found background: {}", background_path.as_path().to_string_lossy().to_mut());
         for logo in logos.by_ref() {
             let logo_path = logo.unwrap().path();
-            if background_path != logo_path {
+            println!("Found logo: {}", logo_path.as_path().to_string_lossy().to_mut());
+            if background_path.file_name().unwrap() != logo_path.file_name().unwrap() {
+                println!("Skipping {} and {}", background_path.as_path().to_string_lossy().to_mut(), logo_path.as_path().to_string_lossy().to_mut());
                 continue;
             }
-            let full_logo_path = logos_path.join(logo_path.as_path()).as_path().to_string_lossy().into_owned();
-            let full_background_path = backgrounds_path.join(background_path.as_path()).as_path().to_string_lossy().into_owned();
-            let logo_img = raster::open(&full_logo_path).unwrap();
-            let background_img = raster::open(&full_background_path).unwrap();
-            let result_image = generate_steam_logo(&logo_img, &background_img);
-            let full_result_path = out_path.join(logo_path.as_path()).as_path().to_string_lossy().into_owned();
-            let save_result = raster::save(&result_image, &full_result_path);
-            match save_result {
-                Ok(_) => {
-                    println!("Successfully generated {}", &full_result_path);
-                }
-                Err(_) => {
-                    println!("ERROR");
-                }
-            }
+            let result_path = Path::new("./output").join(Path::new(logo_path.file_name().unwrap())).as_path();
+            println!("{} + {} = {}", background_path.as_path().to_string_lossy().to_mut(), logo_path.as_path().to_string_lossy().to_mut(), result_path.as_path().to_string_lossy().to_mut());
+            let logo_img = image::open(&logo_path).unwrap();
+            let background_img = image::open(&background_path).unwrap();
+            let result_img = generate_steam_logo(logo_img, background_img);
+            let ref mut result_file = File::create(result_path).unwrap();
+            result_img.save(result_file, image::ImageFormat::PNG).unwrap();
+            break;
         }
     }
 }

@@ -4,4 +4,4 @@ version = "0.1.0"
 authors = ["Stefano Pigozzi <ste.pigozzi@gmail.com>"]
 
 [dependencies]
-raster = "0.2.0"
+image = "0.19.0"
