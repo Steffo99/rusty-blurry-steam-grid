@@ -1,22 +1,23 @@
 extern crate image;
-use std::cmp::Ordering;
 use std::fs;
 use std::path::Path;
 use std::process::exit;
-use std::File;
 use image::imageops;
 use image::GenericImage;
 
 fn generate_steam_logo(logo: image::DynamicImage, background: image::DynamicImage) -> image::DynamicImage {
-    //Resize the background
-    let background = background.resize(460, 215, image::FilterType::Triangle);
+    let resized_background = background.resize_exact(460, 215, image::FilterType::Triangle);
     //Resize the logo
     //15px padding
-    let logo = logo.resize(430, 200, image::FilterType::Triangle);
+    let mut resized_logo;
+    resized_logo = logo.resize(430, 185, image::FilterType::Triangle);
+    //Crop the logo
+    resized_logo.crop(0, 0, 430, 185);
+    println!("w{} h{}", &resized_logo.width(), &resized_logo.height());
     //Blur the background
-    let mut background = background.blur(32.0);
-    imageops::overlay(&mut background, &logo, 15, 15);
-    background
+    let mut last = resized_background.blur(16.0);
+    imageops::overlay(&mut last, &resized_logo, (430 - resized_logo.width()) / 2 + 15, (185 - resized_logo.height()) / 2 + 15);
+    last
 }
 
 fn main() {
@@ -75,13 +76,13 @@ fn main() {
                 println!("Skipping {} and {}", background_path.as_path().to_string_lossy().to_mut(), logo_path.as_path().to_string_lossy().to_mut());
                 continue;
             }
-            let result_path = Path::new("./output").join(Path::new(logo_path.file_name().unwrap())).as_path();
+            let result_path = Path::new("./output").join(Path::new(logo_path.file_name().unwrap()));
             println!("{} + {} = {}", background_path.as_path().to_string_lossy().to_mut(), logo_path.as_path().to_string_lossy().to_mut(), result_path.as_path().to_string_lossy().to_mut());
             let logo_img = image::open(&logo_path).unwrap();
             let background_img = image::open(&background_path).unwrap();
             let result_img = generate_steam_logo(logo_img, background_img);
-            let ref mut result_file = File::create(result_path).unwrap();
-            result_img.save(result_file, image::ImageFormat::PNG).unwrap();
+            let ref mut result_file = fs::File::create(result_path.as_path()).unwrap();
+            result_img.write_to(result_file, image::PNG).unwrap();
             break;
         }
     }
